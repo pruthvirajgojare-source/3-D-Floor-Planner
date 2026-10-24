@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SAMPLE_PLANS } from '../data/sampleFloorPlans';
 import { parseFloorPlanImage } from '../utils/aiFloorPlanParser';
-import { UploadCloud, CheckCircle2, Sparkles, X, FileImage, ArrowRight, Loader2 } from 'lucide-react';
+import { UploadCloud, Sparkles, X, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatLakhs } from '../utils/currency';
 
@@ -15,6 +15,8 @@ export default function FloorPlanUploader({
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   if (!isOpen) return null;
 
@@ -30,17 +32,24 @@ export default function FloorPlanUploader({
 
   const handleFileUpload = async (file) => {
     if (!file) return;
+
+    setErrorMessage('');
     setIsProcessing(true);
+
+    // Create a temporary preview URL for the uploaded image
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
 
     try {
       setProcessingStep('Analyzing 2D line vectors & structural raster...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 500));
 
       setProcessingStep('Segmenting walls, partitions & doorways...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 500));
 
       setProcessingStep('Synthesizing 3D Three.js mesh & applying textures...');
-      const parsed = await parseFloorPlanImage(file, file.name.replace(/\.[^/.]+$/, ""));
+      const cleanName = file.name.replace(/\.[^/.]+$/, '');
+      const parsed = await parseFloorPlanImage(file, cleanName);
 
       onSelectPlan(parsed);
       confetti({
@@ -50,9 +59,14 @@ export default function FloorPlanUploader({
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error('Error parsing floor plan:', err);
+      setErrorMessage('Failed to process the floor plan image. Please try another PNG or JPG file.');
     } finally {
       setIsProcessing(false);
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      setPreviewUrl(null);
     }
   };
 
@@ -81,7 +95,10 @@ export default function FloorPlanUploader({
         {/* Tab Switcher */}
         <div className="flex items-center gap-2 pt-4">
           <button
-            onClick={() => setActiveTab('presets')}
+            onClick={() => {
+              setActiveTab('presets');
+              setErrorMessage('');
+            }}
             className={`py-2 px-4 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'presets'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
@@ -91,7 +108,10 @@ export default function FloorPlanUploader({
             🏛️ Architectural Models (650 to 3,000 SQ FT)
           </button>
           <button
-            onClick={() => setActiveTab('upload')}
+            onClick={() => {
+              setActiveTab('upload');
+              setErrorMessage('');
+            }}
             className={`py-2 px-4 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'upload'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
@@ -153,9 +173,23 @@ export default function FloorPlanUploader({
             </div>
           ) : (
             <div className="space-y-4">
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-xs text-rose-300">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               {isProcessing ? (
-                <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
-                  <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+                <div className="py-12 flex flex-col items-center justify-center gap-4 text-center">
+                  {previewUrl && (
+                    <img
+                      src={previewUrl}
+                      alt="Uploading preview"
+                      className="w-36 h-28 object-contain rounded-xl border border-indigo-500/40 bg-slate-950 p-1.5 shadow-lg"
+                    />
+                  )}
+                  <Loader2 className="w-9 h-9 text-indigo-500 animate-spin" />
                   <div>
                     <h3 className="text-base font-bold text-white">
                       AI Spatial Extraction in Progress
@@ -167,7 +201,10 @@ export default function FloorPlanUploader({
                 </div>
               ) : (
                 <div
-                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragActive(true);
+                  }}
                   onDragLeave={() => setDragActive(false)}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -184,16 +221,20 @@ export default function FloorPlanUploader({
                 >
                   <input
                     type="file"
-                    accept="image/*,.pdf"
+                    accept="image/*"
                     className="hidden"
                     id="floorplan-file-input"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         handleFileUpload(e.target.files[0]);
+                        e.target.value = '';
                       }
                     }}
                   />
-                  <label htmlFor="floorplan-file-input" className="cursor-pointer flex flex-col items-center">
+                  <label
+                    htmlFor="floorplan-file-input"
+                    className="cursor-pointer flex flex-col items-center w-full"
+                  >
                     <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
                       <UploadCloud className="w-7 h-7 text-indigo-400" />
                     </div>
@@ -201,10 +242,10 @@ export default function FloorPlanUploader({
                       Drop any 2D Blueprint, Sketch, or Floor Plan
                     </h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      Supports JPG, PNG, architectural CAD drawings, or hand sketches.
+                      Supports JPG, PNG, WebP architectural CAD drawings, or hand sketches.
                     </p>
                     <span className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/30">
-                      Browse File on Mac
+                      Browse Blueprint File
                     </span>
                   </label>
                 </div>
