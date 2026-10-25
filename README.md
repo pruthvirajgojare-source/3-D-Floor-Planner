@@ -214,3 +214,7 @@ Pruthviraj Gojare
 ⚬ GitHub: @pruthvirajgojare-source
 
 ⚬ Repository: 3-D-Floor-Planner
+
+
+
+https://docs.google.com/presentation/d/1f9VpJD82bVd_4vlS_0LK2zLCK5zmxu89/edit?usp=sharing&ouid=111274335041828849184&rtpof=true&sd=true
